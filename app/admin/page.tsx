@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, InputHTMLAttributes, useEffect, useState } from "react";
 
 type System = { id: string; name: string; version: string; url: string; manualUrl: string; category: string; icon: string; sortOrder: number };
 type Settings = { appName: string; logoUrl: string };
@@ -12,6 +12,16 @@ async function api(action: string, extra: Record<string, unknown> = {}): Promise
 }
 
 const blankSystem = (): System => ({ id: "", name: "", version: "", url: "", manualUrl: "", category: "งานบริการ", icon: "▣", sortOrder: 99 });
+
+function PasswordInput(props: InputHTMLAttributes<HTMLInputElement>) {
+  const [show, setShow] = useState(false);
+  return (
+    <span className="pw-wrap">
+      <input {...props} type={show ? "text" : "password"} />
+      <button type="button" className="pw-toggle" aria-label={show ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน"} aria-pressed={show} onClick={() => setShow((v) => !v)}>{show ? "🙈" : "👁"}</button>
+    </span>
+  );
+}
 
 export default function AdminPage() {
   const [loggedIn, setLoggedIn] = useState(false);
@@ -106,7 +116,7 @@ export default function AdminPage() {
   if (!loggedIn) return <main className="admin-page"><a className="back-home" href="/">← กลับหน้าหลัก</a><form className="login-card" onSubmit={handleLogin}>
     <div className="brand-mark login-mark">S</div><div className="eyebrow dark-eyebrow">ADMIN ACCESS</div><h1>เข้าสู่ระบบผู้ดูแล</h1><p>จัดการข้อมูลระบบสารสนเทศ SmartLinkEdu</p>
     <label>ชื่อผู้ใช้<input required autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="ชื่อผู้ใช้ผู้ดูแล" /></label>
-    <label>รหัสผ่าน<input required type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="กรอกรหัสผ่าน" /></label>
+    <label>รหัสผ่าน<PasswordInput required autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="กรอกรหัสผ่าน" /></label>
     {message && <div className="notice error-state">{message}</div>}
     <button className="primary-action submit-action" disabled={busy}>{busy ? "กำลังเข้าสู่ระบบ..." : "เข้าสู่ระบบ →"}</button>
   </form></main>;
@@ -114,7 +124,7 @@ export default function AdminPage() {
   return <main className="admin-page"><div className="admin-shell">
     <header className="admin-header"><a className="brand" href="/"><span className="brand-mark">S</span><span>SmartLinkEdu Admin</span></a><div><span className="admin-user">ผู้ดูแล: {user}</span><button className="text-button" onClick={logout}>ออกจากระบบ</button></div></header>
     {message && <div className="notice">{message}</div>}
-    {mustChangePassword ? <form className="panel password-panel" onSubmit={savePassword}><h2>ตั้งรหัสผ่านใหม่</h2><p>กรุณาเปลี่ยนรหัสผ่านชั่วคราวก่อนเริ่มใช้งาน</p><label>รหัสผ่านใหม่<input type="password" minLength={12} required value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="อย่างน้อย 12 ตัวอักษร" /></label><button className="primary-action" disabled={busy}>บันทึกรหัสผ่านใหม่</button></form> : <>
+    {mustChangePassword ? <form className="panel password-panel" onSubmit={savePassword}><h2>ตั้งรหัสผ่านใหม่</h2><p>กรุณาเปลี่ยนรหัสผ่านชั่วคราวก่อนเริ่มใช้งาน</p><label>รหัสผ่านใหม่<PasswordInput minLength={12} required value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="อย่างน้อย 12 ตัวอักษร" /></label><button className="primary-action" disabled={busy}>บันทึกรหัสผ่านใหม่</button></form> : <>
       <div className="admin-title"><div><div className="eyebrow dark-eyebrow">CONTROL CENTER</div><h1>จัดการระบบสารสนเทศ</h1></div><span className="result-count">{systems.length} ระบบ</span></div>
       <div className="admin-tabs"><button className={tab === "systems" ? "active" : ""} onClick={() => setTab("systems")}>จัดการระบบ</button><button className={tab === "settings" ? "active" : ""} onClick={() => setTab("settings")}>ตั้งค่าระบบ</button></div>
       {tab === "systems" ? <section className="panel"><div className="panel-heading"><div><h2>รายการระบบ</h2><p>เพิ่ม แก้ไข ลบ และกำหนดลำดับการแสดงผล</p></div><button className="primary-action" onClick={() => setEditing(blankSystem())}>＋ เพิ่มระบบ</button></div>
