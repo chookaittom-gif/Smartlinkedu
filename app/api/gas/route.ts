@@ -6,9 +6,19 @@ export const dynamic = "force-dynamic";
 
 const SESSION_COOKIE = "smarklink_session";
 const SESSION_MAX_AGE = 6 * 60 * 60;
+const GOOGLE_CONTENT_HOSTS = new Set(["script.googleusercontent.com", "script.google.com"]);
+
+type GasReply = {
+  response: Response;
+  raw: string;
+  url: string;
+  bouncedToExec: boolean;
+  detail?: string;
+};
+
 function parseJsonObject(raw: string): Record<string, unknown> | null {
   try {
-    const parsed: unknown = JSON.parse(raw.replace(/^\\uFEFF/, "").trim());
+    const parsed: unknown = JSON.parse(raw.replace(/^\uFEFF/, "").trim());
     return parsed && typeof parsed === "object" && !Array.isArray(parsed)
       ? (parsed as Record<string, unknown>)
       : null;
@@ -19,6 +29,122 @@ function parseJsonObject(raw: string): Record<string, unknown> | null {
 
 function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isAppsScriptExec(url: URL) {
+  return url.hostname === "script.google.com" &&
+    /\/macros\/s\/[^/]+\/exec\/?$/.test(url.pathname);
+}
+
+async function getContentResponse(startUrl: URL): Promise<GasReply> {
+  let currentUrl = startUrl;
+  let response: Response | null = null;
+  let raw = "";
+
+  // Walk redirects one hop at a time. Never follow a ContentService redirect
+  // back to /exec as GET: that would call doGet() after the original doPost().
+  for (let hop = 0; hop < 5; hop++) {
+    if (isAppsScriptExec(currentUrl)) {
+      return {
+        response: response ?? new Response("", { status: 502 }),
+        raw,
+        url: currentUrl.toString(),
+        bouncedToExec: true,
+        detail: "Google ContentService redirected back to the Web App /exec URL",
+      };
+    }
+
+    if (currentUrl.protocol !== "https:" || !GOOGLE_CONTENT_HOSTS.has(currentUrl.hostname)) {
+      return {
+        response: response ?? new Response("", { status: 502 }),
+        raw,
+        url: currentUrl.toString(),
+        bouncedToExec: false,
+        detail: `Unexpected Google redirect host: ${currentUrl.hostname}`,
+      };
+    }
+
+    response = await fetch(currentUrl.toString(), {
+      method: "GET",
+      cache: "no-store",
+      redirect: "manual",
+      signal: AbortSignal.timeout(7_000),
+    });
+
+    if (response.status >= 300 && response.status < 400) {
+      const location = response.headers.get("location");
+      if (!location) {
+        raw = await response.text();
+        return { response, raw, url: currentUrl.toString(), bouncedToExec: false, detail: "Redirect has no Location header" };
+      }
+      currentUrl = new URL(location, currentUrl);
+      continue;
+    }
+
+    raw = await response.text();
+    const parsed = parseJsonObject(raw);
+
+    // Google has a currently reported intermittent ContentService delivery
+    // failure. The same one-time googleusercontent URL can become available
+    // after a short delay, so retry only this GET, never the original POST.
+    if (!parsed && currentUrl.hostname === "script.googleusercontent.com" && hop < 4) {
+      for (let retry = 0; retry < 2; retry++) {
+        await delay(1_500 * (retry + 1));
+        response = await fetch(currentUrl.toString(), {
+          method: "GET",
+          cache: "no-store",
+          redirect: "manual",
+          signal: AbortSignal.timeout(7_000),
+        });
+        if (response.status >= 300 && response.status < 400) {
+          const location = response.headers.get("location");
+          if (location) {
+            currentUrl = new URL(location, currentUrl);
+            break;
+          }
+        } else {
+          raw = await response.text();
+          if (parseJsonObject(raw)) {
+            return { response, raw, url: currentUrl.toString(), bouncedToExec: false };
+          }
+        }
+      }
+      if (response.status >= 300 && response.status < 400) continue;
+    }
+
+    return { response, raw, url: currentUrl.toString(), bouncedToExec: false };
+  }
+
+  return {
+    response: response ?? new Response("", { status: 502 }),
+    raw,
+    url: currentUrl.toString(),
+    bouncedToExec: isAppsScriptExec(currentUrl),
+    detail: "Google redirect limit exceeded",
+  };
+}
+
+async function callGas(gasUrl: string, requestBody: string): Promise<GasReply> {
+  const initial = await fetch(gasUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: requestBody,
+    cache: "no-store",
+    redirect: "manual",
+    signal: AbortSignal.timeout(7_000),
+  });
+
+  if (initial.status >= 300 && initial.status < 400) {
+    const location = initial.headers.get("location");
+    if (!location) {
+      const raw = await initial.text();
+      return { response: initial, raw, url: gasUrl, bouncedToExec: false, detail: "POST redirect has no Location header" };
+    }
+    return getContentResponse(new URL(location, gasUrl));
+  }
+
+  const raw = await initial.text();
+  return { response: initial, raw, url: initial.url || gasUrl, bouncedToExec: false };
 }
 
 export async function POST(request: NextRequest) {
@@ -46,88 +172,49 @@ export async function POST(request: NextRequest) {
 
   const cookieStore = await cookies();
   const sessionToken = cookieStore.get(SESSION_COOKIE)?.value;
-
   const outgoing: Record<string, unknown> = { ...incoming };
   if (action !== "login") outgoing.sessionToken = sessionToken ?? "";
   const requestBody = JSON.stringify({ ...outgoing, apiSecret });
 
   try {
-    // Apps Script ContentService returns a 302 to a one-time googleusercontent URL.
-    // Handle that redirect explicitly so the POST is not replayed as a GET to /exec,
-    // and retry only the final read of the one-time response URL if Google's content
-    // serving layer has not made the response available yet.
-    const initial = await fetch(gasUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: requestBody,
-      cache: "no-store",
-      redirect: "manual",
-      signal: AbortSignal.timeout(25_000),
-    });
+    let reply: GasReply | null = null;
+    // Only repeat the original POST for idempotent read operations. Never replay
+    // save/delete/password/logout actions because doPost may already have run.
+    const safeToRetryPost = ["publicData", "me", "adminData"].includes(action);
+    const postAttempts = safeToRetryPost ? 2 : 1;
 
-    let upstream = initial;
-    let finalUrl = initial.url || gasUrl;
-    let raw = "";
-
-    if (initial.status >= 300 && initial.status < 400) {
-      const location = initial.headers.get("location");
-      if (!location) {
-        return NextResponse.json(
-          { ok: false, message: `GAS ตอบกลับ HTTP ${initial.status} แต่ไม่มี Location สำหรับ ContentService redirect` },
-          { status: 502 },
-        );
-      }
-
-      const redirectedUrl = new URL(location, gasUrl);
-      if (
-        redirectedUrl.protocol !== "https:" ||
-        !["script.googleusercontent.com", "script.google.com"].includes(redirectedUrl.hostname)
-      ) {
-        return NextResponse.json(
-          { ok: false, message: `GAS redirect ไปยัง host ที่ไม่คาดหมาย: ${redirectedUrl.hostname}` },
-          { status: 502 },
-        );
-      }
-
-      for (let attempt = 0; attempt < 3; attempt++) {
-        upstream = await fetch(redirectedUrl.toString(), {
-          method: "GET",
-          cache: "no-store",
-          redirect: "follow",
-          signal: AbortSignal.timeout(25_000),
-        });
-        finalUrl = upstream.url || redirectedUrl.toString();
-        raw = await upstream.text();
-
-        if (upstream.ok && parseJsonObject(raw)) break;
-        if (attempt < 2) await delay(500 * (attempt + 1));
-      }
-    } else {
-      finalUrl = initial.url || gasUrl;
-      raw = await initial.text();
+    for (let attempt = 0; attempt < postAttempts; attempt++) {
+      reply = await callGas(gasUrl, requestBody);
+      const parsed = parseJsonObject(reply.raw);
+      if (parsed || !reply.bouncedToExec || attempt === postAttempts - 1) break;
+      await delay(1_500);
     }
 
-    const result = parseJsonObject(raw);
+    if (!reply) {
+      return NextResponse.json({ ok: false, message: "ไม่ได้รับผลตอบกลับจาก GAS" }, { status: 502 });
+    }
+
+    const result = parseJsonObject(reply.raw);
     if (!result) {
-      const contentType = upstream.headers.get("content-type") || "unknown";
-      let finalHost = "unknown";
-      try {
-        finalHost = new URL(finalUrl).hostname;
-      } catch {
-        // Keep the diagnostic host as unknown if the response URL is malformed.
-      }
-      const preview = raw.replace(/\\s+/g, " ").slice(0, 180);
+      const contentType = reply.response.headers.get("content-type") || "unknown";
+      let host = "unknown";
+      try { host = new URL(reply.url).hostname; } catch { /* ignore malformed URL */ }
+      const preview = reply.raw.replace(/\s+/g, " ").slice(0, 180);
+      const detail = reply.detail ? ` ${reply.detail}.` : "";
+      const retryHint = safeToRetryPost
+        ? " ลองโหลดหน้าใหม่อีกครั้งได้ เพราะคำขอนี้เป็นการอ่านข้อมูล"
+        : " คำสั่งอาจทำงานที่ GAS แล้ว แต่ Google ส่งผลลัพธ์กลับไม่สำเร็จ โปรดตรวจข้อมูลก่อนกดบันทึกซ้ำ";
       return NextResponse.json(
         {
           ok: false,
-          message: `GAS ไม่ได้ส่ง JSON (HTTP ${upstream.status}, Content-Type ${contentType}, host ${finalHost}) ${preview}`.trim(),
+          message: `GAS ไม่ได้ส่ง JSON (HTTP ${reply.response.status}, Content-Type ${contentType}, host ${host}).${detail} ${preview}${retryHint}`.trim(),
         },
         { status: 502 },
       );
     }
 
-    if (!upstream.ok || result.ok !== true) {
-      const status = upstream.status >= 400 ? upstream.status : 401;
+    if (!reply.response.ok || result.ok !== true) {
+      const status = reply.response.status >= 400 ? reply.response.status : 401;
       return NextResponse.json(result, { status });
     }
 
