@@ -111,7 +111,7 @@ export default function HomePage() {
 
       <footer className="site-footer">
         <div className="footer-inner">
-          <div className="footer-brand"><img src="/logo-sdu.png" alt="โลโก้มหาวิทยาลัยสวนดุสิต" className="brand-logo footer-logo" /><strong>{settings.appName || "SmartLinkEdu"}</strong></div>
+          <div className="footer-brand"><span className="brand-mark small-mark">S</span><strong>{settings.appName || "SmartLinkEdu"}</strong></div>
           <div className="footer-credit">ผู้พัฒนา โดย นายชูเกียรติ กุศลสถิตย์</div>
           <div className="footer-credit">มหาวิทยาลัยสวนดุสิต ศูนย์การศึกษาลำปาง</div>
           <div className="footer-copy">© {new Date().getFullYear()} SmartLinkEdu · Digital Campus Directory</div>
