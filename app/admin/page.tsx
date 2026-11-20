@@ -122,7 +122,7 @@ export default function AdminPage() {
   </form></main>;
 
   return <main className="admin-page"><div className="admin-shell">
-    <header className="admin-header"><a className="brand" href="/"><span className="brand-mark">S</span><span>SmartLinkEdu Admin</span></a><div><span className="admin-user">ผู้ดูแล: {user}</span><button className="text-button" onClick={logout}>ออกจากระบบ</button></div></header>
+    <header className="admin-header"><a className="brand" href="/"><span className="brand-mark">S</span><span>SmartLinkEdu Admin</span></a><div><span className="admin-user">ผู้ดูแล: {user}</span><a className="text-button" href="/">กลับหน้าหลัก</a><button className="text-button" onClick={logout}>ออกจากระบบ</button></div></header>
     {message && <div className="notice">{message}</div>}
     {mustChangePassword ? <form className="panel password-panel" onSubmit={savePassword}><h2>ตั้งรหัสผ่านใหม่</h2><p>กรุณาเปลี่ยนรหัสผ่านชั่วคราวก่อนเริ่มใช้งาน</p><label>รหัสผ่านใหม่<PasswordInput minLength={12} required value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="อย่างน้อย 12 ตัวอักษร" /></label><button className="primary-action" disabled={busy}>บันทึกรหัสผ่านใหม่</button></form> : <>
       <div className="admin-title"><div><div className="eyebrow dark-eyebrow">CONTROL CENTER</div><h1>จัดการระบบสารสนเทศ</h1></div><span className="result-count">{systems.length} ระบบ</span></div>
