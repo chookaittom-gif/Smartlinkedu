@@ -130,17 +130,32 @@ function doPost(e) {
 
 function login_(body) {
   const props = PropertiesService.getScriptProperties();
-  const username = String(body.username || "").trim();
+  const username = String(body.username || "").trim().slice(0, 100);
   const password = String(body.password || "");
+  const cache = CacheService.getScriptCache();
+  const rateDigest = Utilities.computeDigest(
+    Utilities.DigestAlgorithm.SHA_256,
+    username,
+    Utilities.Charset.UTF_8
+  ).map(byte => ("0" + ((byte & 255).toString(16))).slice(-2)).join("");
+  const rateKey = "login_fail_" + rateDigest;
+  const failedAttempts = Number(cache.get(rateKey) || 0);
+  if (failedAttempts >= 8) {
+    return { ok: false, message: "พยายามเข้าสู่ระบบหลายครั้งเกินไป กรุณารอ 15 นาที" };
+  }
+
   const savedUser = props.getProperty("ADMIN_USERNAME");
   const salt = props.getProperty("ADMIN_PASSWORD_SALT");
   const savedHash = props.getProperty("ADMIN_PASSWORD_HASH");
   if (!savedUser || !salt || !savedHash || username !== savedUser ||
       !constantTimeEquals_(passwordHash_(password, salt), savedHash)) {
+    cache.put(rateKey, String(failedAttempts + 1), 900);
     return { ok: false, message: "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง" };
   }
+
+  cache.remove(rateKey);
   const token = randomSecret_() + randomSecret_();
-  CacheService.getScriptCache().put("session_" + token, username, APP.sessionTtlSeconds);
+  cache.put("session_" + token, username, APP.sessionTtlSeconds);
   return {
     ok: true,
     user: username,
