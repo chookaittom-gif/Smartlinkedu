@@ -6,8 +6,6 @@ export const dynamic = "force-dynamic";
 
 const SESSION_COOKIE = "smarklink_session";
 const SESSION_MAX_AGE = 6 * 60 * 60;
-const JSON_CONTENT = /^(application\\/json|text\\/json)(;|$)/i;
-
 function parseJsonObject(raw: string): Record<string, unknown> | null {
   try {
     const parsed: unknown = JSON.parse(raw.replace(/^\\uFEFF/, "").trim());
