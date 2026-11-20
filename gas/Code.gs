@@ -314,8 +314,16 @@ function getSeedSystems_() {
 
 function passwordHash_(password, salt) {
   const pepper = PropertiesService.getScriptProperties().getProperty("AUTH_PEPPER") || "";
-  const signature = Utilities.computeHmacSha256Signature(String(password), salt + pepper, Utilities.Charset.UTF_8);
-  return signature.map(byte => ("0" + ((byte & 255).toString(16))).slice(-2)).join("");
+  // Iterated HMAC-SHA256 slows offline guessing if a stored hash is ever exposed.
+  let digest = Utilities.computeHmacSha256Signature(
+    String(password) + ":" + salt,
+    pepper,
+    Utilities.Charset.UTF_8
+  );
+  for (let i = 0; i < 10000; i++) {
+    digest = Utilities.computeHmacSha256Signature(digest, pepper, Utilities.Charset.UTF_8);
+  }
+  return digest.map(byte => ("0" + ((byte & 255).toString(16))).slice(-2)).join("");
 }
 
 function randomSecret_() {
