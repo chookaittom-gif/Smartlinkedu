@@ -329,16 +329,27 @@ function getSeedSystems_() {
 
 function passwordHash_(password, salt) {
   const pepper = PropertiesService.getScriptProperties().getProperty("AUTH_PEPPER") || "";
-  // Iterated HMAC-SHA256 slows offline guessing if a stored hash is ever exposed.
+
+  // Start with a string input. Apps Script returns a number[] of signed bytes.
   let digest = Utilities.computeHmacSha256Signature(
-    String(password) + ":" + salt,
+    String(password) + ":" + String(salt),
     pepper,
     Utilities.Charset.UTF_8
   );
+
+  // Convert each byte array to Base64 text before the next HMAC round.
+  // This uses the supported (String, String, Charset) overload consistently.
   for (let i = 0; i < 10000; i++) {
-    digest = Utilities.computeHmacSha256Signature(digest, pepper, Utilities.Charset.UTF_8);
+    digest = Utilities.computeHmacSha256Signature(
+      Utilities.base64Encode(digest),
+      pepper,
+      Utilities.Charset.UTF_8
+    );
   }
-  return digest.map(byte => ("0" + ((byte & 255).toString(16))).slice(-2)).join("");
+
+  return digest
+    .map(byte => ("0" + ((byte & 255).toString(16))).slice(-2))
+    .join("");
 }
 
 function randomSecret_() {
