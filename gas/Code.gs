@@ -12,7 +12,10 @@ const APP = {
   systemsSheet: "Systems",
   settingsSheet: "Settings",
   sessionTtlSeconds: 21600,
-  maxLogoBytes: 1024 * 1024
+  maxLogoBytes: 1024 * 1024,
+  resetCodeTtlSeconds: 900,
+  resetCodeMaxAttempts: 5,
+  resetMaxRequestsPerHour: 3
 };
 
 function initializeSmartLinkEdu() {
@@ -95,6 +98,8 @@ function doPost(e) {
     const action = String(body.action || "");
     if (action === "publicData") return json_(publicData_());
     if (action === "login") return json_(login_(body));
+    if (action === "forgotPassword") return json_(forgotPassword_(body));
+    if (action === "resetPassword") return json_(resetPassword_(body));
 
     const username = requireSession_(body.sessionToken);
     if (!username) return json_({ ok: false, message: "กรุณาเข้าสู่ระบบใหม่" });
@@ -173,6 +178,17 @@ function changePassword_(body) {
   const password = String(body.newPassword || "");
   if (password.length < 12) return { ok: false, message: "รหัสผ่านใหม่ต้องมีอย่างน้อย 12 ตัวอักษร" };
   const props = PropertiesService.getScriptProperties();
+  // Voluntary changes must re-check the current password. The first-run
+  // forced change is exempt: the admin just logged in with the temp password.
+  if (props.getProperty("PASSWORD_CHANGE_REQUIRED") !== "true") {
+    const current = String(body.currentPassword || "");
+    const savedSalt = props.getProperty("ADMIN_PASSWORD_SALT");
+    const savedHash = props.getProperty("ADMIN_PASSWORD_HASH");
+    if (!current || !savedSalt || !savedHash ||
+        !constantTimeEquals_(passwordHash_(current, savedSalt), savedHash)) {
+      return { ok: false, message: "รหัสผ่านปัจจุบันไม่ถูกต้อง" };
+    }
+  }
   const salt = randomSecret_().slice(0, 32);
   props.setProperties({
     ADMIN_PASSWORD_SALT: salt,
@@ -180,6 +196,68 @@ function changePassword_(body) {
     PASSWORD_CHANGE_REQUIRED: "false"
   });
   return { ok: true, message: "เปลี่ยนรหัสผ่านเรียบร้อย" };
+}
+
+function forgotPassword_(body) {
+  const email = String(body.email || "").trim().toLowerCase();
+  if (!isEmail_(email)) return { ok: false, message: "รูปแบบอีเมลไม่ถูกต้อง" };
+  const adminEmail = String(readSettings_().adminEmail || "").trim().toLowerCase();
+  if (!adminEmail) return { ok: false, message: "ยังไม่ได้ตั้งค่าอีเมลผู้ดูแล กรุณาเพิ่มอีเมลในแท็บตั้งค่าระบบของหน้าผู้ดูแล หรือรีเซ็ตผ่าน Apps Script editor" };
+
+  const genericMessage = "หากอีเมลนี้อยู่ในระบบ รหัสรีเซ็ตจะถูกส่งไปตามอีเมลดังกล่าว (โปรดตรวจสอบในกล่องจดหมาย)";
+  const cache = CacheService.getScriptCache();
+  const requests = Number(cache.get("pwreq_" + email) || 0);
+  if (requests >= APP.resetMaxRequestsPerHour) {
+    return { ok: false, message: "ขอรหัสรีเซ็ตบ่อยเกินไป กรุณารอสักครู่แล้วลองใหม่" };
+  }
+  // Same reply whether or not the email matches, so nobody can probe the
+  // registered address by observing responses.
+  if (email !== adminEmail) return { ok: true, message: genericMessage };
+
+  cache.put("pwreq_" + email, String(requests + 1), 3600);
+  const code = String(Math.floor(100000 + Math.random() * 900000));
+  cache.put("pwcode_" + code, email, APP.resetCodeTtlSeconds);
+  cache.put("pwatt_" + code, "0", APP.resetCodeTtlSeconds);
+  MailApp.sendEmail({
+    to: adminEmail,
+    subject: "SmartLinkEdu — รหัสรีเซ็ตรหัสผ่าน",
+    body: "รหัสรีเซ็ตรหัสผ่านของคุณคือ: " + code +
+      "\n\nรหัสนี้ใช้ได้ภายใน 15 นาที และใช้ได้เพียงครั้งเดียว" +
+      "\nหากคุณไม่ได้ขอรหัสนี้ กรุณาละเว้นอีเมลฉบับนี้" +
+      "\n\n— SmartLinkEdu"
+  });
+  return { ok: true, message: genericMessage };
+}
+
+function resetPassword_(body) {
+  const code = String(body.code || "").trim();
+  const newPassword = String(body.newPassword || "");
+  if (newPassword.length < 12) return { ok: false, message: "รหัสผ่านใหม่ต้องมีอย่างน้อย 12 ตัวอักษร" };
+  const cache = CacheService.getScriptCache();
+  const codeKey = "pwcode_" + code;
+  if (!cache.get(codeKey)) return { ok: false, message: "โค้ดไม่ถูกต้องหรือหมดอายุ กรุณาขอโค้ดใหม่" };
+  const attempts = Number(cache.get("pwatt_" + code) || 0);
+  if (attempts >= APP.resetCodeMaxAttempts) {
+    cache.remove(codeKey);
+    cache.remove("pwatt_" + code);
+    return { ok: false, message: "กรอกโค้ดผิดหลายครั้งเกินไป กรุณาขอโค้ดใหม่" };
+  }
+  cache.put("pwatt_" + code, String(attempts + 1), APP.resetCodeTtlSeconds);
+
+  const props = PropertiesService.getScriptProperties();
+  const salt = randomSecret_().slice(0, 32);
+  props.setProperties({
+    ADMIN_PASSWORD_SALT: salt,
+    ADMIN_PASSWORD_HASH: passwordHash_(newPassword, salt),
+    PASSWORD_CHANGE_REQUIRED: "false"
+  });
+  cache.remove(codeKey);
+  cache.remove("pwatt_" + code);
+  return { ok: true, message: "ตั้งรหัสผ่านใหม่เรียบร้อย กรุณาเข้าสู่ระบบด้วยรหัสใหม่" };
+}
+
+function isEmail_(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
 function publicData_() {
@@ -249,6 +327,8 @@ function saveSettings_(settings) {
   const sheet = getSpreadsheet_().getSheetByName(APP.settingsSheet);
   const appName = String(settings.appName || APP.name).trim().slice(0, 100);
   let logoUrl = String(settings.logoUrl || "").trim();
+  const adminEmail = String(settings.adminEmail || "").trim();
+  if (adminEmail && !isEmail_(adminEmail)) return { ok: false, message: "รูปแบบอีเมลผู้ดูแลไม่ถูกต้อง" };
 
   if (settings.logoDataUrl) {
     const match = String(settings.logoDataUrl).match(/^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/);
@@ -265,6 +345,7 @@ function saveSettings_(settings) {
 
   setSetting_(sheet, "appName", appName);
   setSetting_(sheet, "logoUrl", logoUrl);
+  setSetting_(sheet, "adminEmail", adminEmail);
   return { ok: true, message: "บันทึกการตั้งค่าเรียบร้อย", settings: readSettings_() };
 }
 

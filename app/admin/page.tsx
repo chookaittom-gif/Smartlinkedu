@@ -3,7 +3,7 @@
 import { FormEvent, InputHTMLAttributes, useEffect, useState } from "react";
 
 type System = { id: string; name: string; version: string; url: string; manualUrl: string; category: string; icon: string; sortOrder: number };
-type Settings = { appName: string; logoUrl: string };
+type Settings = { appName: string; logoUrl: string; adminEmail?: string };
 type ApiResult = { ok: boolean; message?: string; user?: string; passwordChangeRequired?: boolean; systems?: System[]; settings?: Settings };
 
 async function api(action: string, extra: Record<string, unknown> = {}): Promise<ApiResult> {
@@ -36,6 +36,19 @@ export default function AdminPage() {
   const [tab, setTab] = useState<"systems" | "settings">("systems");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [messageOk, setMessageOk] = useState(false);
+  const [forgotMode, setForgotMode] = useState(0);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotCode, setForgotCode] = useState("");
+  const [forgotNew1, setForgotNew1] = useState("");
+  const [forgotNew2, setForgotNew2] = useState("");
+  const [forgotMsg, setForgotMsg] = useState("");
+  const [forgotErr, setForgotErr] = useState(false);
+  const [pwCurrent, setPwCurrent] = useState("");
+  const [pwNew1, setPwNew1] = useState("");
+  const [pwNew2, setPwNew2] = useState("");
+  const [pwMsg, setPwMsg] = useState("");
+  const [pwErr, setPwErr] = useState(false);
 
   async function loadDashboard() {
     const result = await api("adminData");
@@ -72,6 +85,41 @@ export default function AdminPage() {
       if (!result.ok) throw new Error(result.message || "เปลี่ยนรหัสผ่านไม่สำเร็จ");
       setMustChangePassword(false); setNewPassword(""); setMessage("เปลี่ยนรหัสผ่านสำเร็จ");
     } catch (err) { setMessage(err instanceof Error ? err.message : "เกิดข้อผิดพลาด"); }
+    finally { setBusy(false); }
+  }
+
+  async function requestReset(e: FormEvent) {
+    e.preventDefault(); setBusy(true); setForgotMsg(""); setForgotErr(false);
+    try {
+      const result = await api("forgotPassword", { email: forgotEmail });
+      if (!result.ok) throw new Error(result.message || "ไม่สามารถส่งรหัสรีเซ็ตได้");
+      setForgotMode(2); setForgotMsg(result.message || "โปรดตรวจสอบอีเมลของคุณ");
+    } catch (err) { setForgotErr(true); setForgotMsg(err instanceof Error ? err.message : "เกิดข้อผิดพลาด"); }
+    finally { setBusy(false); }
+  }
+
+  async function submitReset(e: FormEvent) {
+    e.preventDefault();
+    if (forgotNew1 !== forgotNew2) { setForgotErr(true); setForgotMsg("รหัสผ่านใหม่ทั้งสองช่องไม่ตรงกัน"); return; }
+    setBusy(true); setForgotMsg(""); setForgotErr(false);
+    try {
+      const result = await api("resetPassword", { code: forgotCode, newPassword: forgotNew1 });
+      if (!result.ok) throw new Error(result.message || "ตั้งรหัสผ่านใหม่ไม่สำเร็จ");
+      setForgotMode(0); setForgotEmail(""); setForgotCode(""); setForgotNew1(""); setForgotNew2("");
+      setMessage("ตั้งรหัสผ่านใหม่เรียบร้อย กรุณาเข้าสู่ระบบด้วยรหัสใหม่"); setMessageOk(true);
+    } catch (err) { setForgotErr(true); setForgotMsg(err instanceof Error ? err.message : "เกิดข้อผิดพลาด"); }
+    finally { setBusy(false); }
+  }
+
+  async function changeOwnPassword(e: FormEvent) {
+    e.preventDefault();
+    if (pwNew1 !== pwNew2) { setPwErr(true); setPwMsg("รหัสผ่านใหม่ทั้งสองช่องไม่ตรงกัน"); return; }
+    setBusy(true); setPwMsg(""); setPwErr(false);
+    try {
+      const result = await api("changePassword", { currentPassword: pwCurrent, newPassword: pwNew1 });
+      if (!result.ok) throw new Error(result.message || "เปลี่ยนรหัสผ่านไม่สำเร็จ");
+      setPwCurrent(""); setPwNew1(""); setPwNew2(""); setPwErr(false); setPwMsg("เปลี่ยนรหัสผ่านสำเร็จ");
+    } catch (err) { setPwErr(true); setPwMsg(err instanceof Error ? err.message : "เกิดข้อผิดพลาด"); }
     finally { setBusy(false); }
   }
 
@@ -113,13 +161,28 @@ export default function AdminPage() {
 
   async function logout() { await api("logout"); setLoggedIn(false); setUser(""); }
 
-  if (!loggedIn) return <main className="admin-page"><a className="back-home" href="/">← กลับหน้าหลัก</a><form className="login-card" onSubmit={handleLogin}>
-    <div className="brand-mark login-mark">S</div><div className="eyebrow dark-eyebrow">ADMIN ACCESS</div><h1>เข้าสู่ระบบผู้ดูแล</h1><p>จัดการข้อมูลระบบสารสนเทศ SmartLinkEdu</p>
-    <label>ชื่อผู้ใช้<input required autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="ชื่อผู้ใช้ผู้ดูแล" /></label>
-    <label>รหัสผ่าน<PasswordInput required autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="กรอกรหัสผ่าน" /></label>
-    {message && <div className="notice error-state">{message}</div>}
-    <button className="primary-action submit-action" disabled={busy}>{busy ? "กำลังเข้าสู่ระบบ..." : "เข้าสู่ระบบ →"}</button>
-  </form></main>;
+  if (!loggedIn) return <main className="admin-page"><a className="back-home" href="/">← กลับหน้าหลัก</a>
+    {forgotMode === 0 ? <form className="login-card" onSubmit={handleLogin}>
+      <div className="brand-mark login-mark">S</div><div className="eyebrow dark-eyebrow">ADMIN ACCESS</div><h1>เข้าสู่ระบบผู้ดูแล</h1><p>จัดการข้อมูลระบบสารสนเทศ SmartLinkEdu</p>
+      <label>ชื่อผู้ใช้<input required autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="ชื่อผู้ใช้ผู้ดูแล" /></label>
+      <label>รหัสผ่าน<PasswordInput required autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="กรอกรหัสผ่าน" /></label>
+      {message && <div className={messageOk ? "notice" : "notice error-state"}>{message}</div>}
+      <button className="primary-action submit-action" disabled={busy}>{busy ? "กำลังเข้าสู่ระบบ..." : "เข้าสู่ระบบ →"}</button>
+      <a className="forgot-link" href="#forgot" onClick={(e) => { e.preventDefault(); setForgotMode(1); setForgotMsg(""); setForgotErr(false); }}>ลืมรหัสผ่าน?</a>
+    </form> : <form className="login-card" onSubmit={forgotMode === 1 ? requestReset : submitReset}>
+      <div className="brand-mark login-mark">S</div><div className="eyebrow dark-eyebrow">ADMIN ACCESS</div>
+      <h1>{forgotMode === 1 ? "ลืมรหัสผ่าน" : "ตั้งรหัสผ่านใหม่"}</h1>
+      <p>{forgotMode === 1 ? "กรอกอีเมลผู้ดูแลเพื่อรับรหัสรีเซ็ต" : "กรอกรหัสจากอีเมล พร้อมรหัสผ่านใหม่ของคุณ"}</p>
+      {forgotMode === 1 ? <label>อีเมลผู้ดูแล<input required type="email" autoComplete="email" value={forgotEmail} onChange={(e) => setForgotEmail(e.target.value)} placeholder="อีเมลที่ตั้งค่าไว้ในระบบ" /></label> : <>
+        <label>รหัสจากอีเมล<input required inputMode="numeric" pattern="[0-9]{6}" title="โค้ด 6 หลัก" maxLength={6} value={forgotCode} onChange={(e) => setForgotCode(e.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="โค้ด 6 หลัก" /></label>
+        <label>รหัสผ่านใหม่<PasswordInput required minLength={12} autoComplete="new-password" value={forgotNew1} onChange={(e) => setForgotNew1(e.target.value)} placeholder="อย่างน้อย 12 ตัวอักษร" /></label>
+        <label>ยืนยันรหัสผ่านใหม่<PasswordInput required minLength={12} autoComplete="new-password" value={forgotNew2} onChange={(e) => setForgotNew2(e.target.value)} placeholder="พิมพ์รหัสผ่านใหม่อีกครั้ง" /></label>
+      </>}
+      {forgotMsg && <div className={forgotErr ? "notice error-state" : "notice"}>{forgotMsg}</div>}
+      <button className="primary-action submit-action" disabled={busy}>{busy ? "กำลังดำเนินการ..." : forgotMode === 1 ? "ส่งรหัสรีเซ็ต" : "ตั้งรหัสผ่านใหม่"}</button>
+      <a className="forgot-link" href="#back" onClick={(e) => { e.preventDefault(); setForgotMode(0); setForgotMsg(""); setForgotErr(false); }}>← กลับไปเข้าสู่ระบบ</a>
+    </form>}
+  </main>;
 
   return <main className="admin-page"><div className="admin-shell">
     <header className="admin-header"><a className="brand" href="/"><span className="brand-mark">S</span><span>SmartLinkEdu Admin</span></a><div><span className="admin-user">ผู้ดูแล: {user}</span><a className="text-button" href="/">กลับหน้าหลัก</a><button className="text-button" onClick={logout}>ออกจากระบบ</button></div></header>
@@ -135,7 +198,8 @@ export default function AdminPage() {
           <div className="form-actions"><button type="button" className="secondary-action" onClick={() => setEditing(null)}>ยกเลิก</button><button className="primary-action" disabled={busy}>บันทึก</button></div>
         </form>}
         <div className="admin-list">{systems.slice().sort((a,b) => a.sortOrder-b.sortOrder).map((s) => <div className="admin-row" key={s.id}><span className="admin-row-icon">{s.icon || "▣"}</span><div className="admin-row-info"><strong>{s.name}</strong><small>{s.url}</small></div><span className="order-badge">#{s.sortOrder}</span><button className="secondary-action" onClick={() => setEditing({ ...s })}>แก้ไข</button><button className="danger-button" onClick={() => deleteSystem(s.id)}>ลบ</button></div>)}</div>
-      </section> : <section className="panel"><h2>ตั้งค่าระบบรวมลิงก์</h2><p>เปลี่ยนชื่อระบบและโลโก้ที่แสดงในหน้าหลัก</p><form className="edit-form" onSubmit={saveSettings}><label>ชื่อระบบ<input required value={settings.appName} onChange={(e) => setSettings({ ...settings, appName: e.target.value })} /></label><label>โลโก้ระบบ<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => void uploadLogo(e.target.files?.[0])} /></label>{settings.logoUrl && <img className="settings-logo" src={settings.logoUrl} alt="โลโก้ปัจจุบัน" />}<button className="primary-action" disabled={busy}>บันทึกการตั้งค่า</button></form></section>}
+      </section> : <><section className="panel"><h2>ตั้งค่าระบบรวมลิงก์</h2><p>เปลี่ยนชื่อระบบ โลโก้ และอีเมลผู้ดูแล</p><form className="edit-form" onSubmit={saveSettings}><label>ชื่อระบบ<input required value={settings.appName} onChange={(e) => setSettings({ ...settings, appName: e.target.value })} /></label><label>โลโก้ระบบ<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => void uploadLogo(e.target.files?.[0])} /></label>{settings.logoUrl && <img className="settings-logo" src={settings.logoUrl} alt="โลโก้ปัจจุบัน" />}<label>อีเมลผู้ดูแล (ใช้รับรหัสรีเซ็ตรหัสผ่าน)<input type="email" value={settings.adminEmail ?? ""} onChange={(e) => setSettings({ ...settings, adminEmail: e.target.value })} placeholder="admin@example.com" /></label><button className="primary-action" disabled={busy}>บันทึกการตั้งค่า</button></form></section>
+        <section className="panel password-panel"><h2>เปลี่ยนรหัสผ่าน</h2><p>ตรวจสอบรหัสผ่านปัจจุบันก่อนตั้งรหัสผ่านใหม่</p><form className="edit-form" onSubmit={changeOwnPassword}><label>รหัสผ่านปัจจุบัน<PasswordInput required autoComplete="current-password" value={pwCurrent} onChange={(e) => setPwCurrent(e.target.value)} /></label><label>รหัสผ่านใหม่<PasswordInput required minLength={12} autoComplete="new-password" value={pwNew1} onChange={(e) => setPwNew1(e.target.value)} placeholder="อย่างน้อย 12 ตัวอักษร" /></label><label>ยืนยันรหัสผ่านใหม่<PasswordInput required minLength={12} autoComplete="new-password" value={pwNew2} onChange={(e) => setPwNew2(e.target.value)} placeholder="พิมพ์รหัสผ่านใหม่อีกครั้ง" /></label>{pwMsg && <div className={pwErr ? "notice error-state" : "notice"}>{pwMsg}</div>}<button className="primary-action" disabled={busy}>เปลี่ยนรหัสผ่าน</button></form></section></>}
     </>}
   </div></main>;
 }

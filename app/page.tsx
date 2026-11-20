@@ -63,7 +63,7 @@ export default function HomePage() {
         <nav className="topbar shell">
           <a href="/" className="brand">
             {settings.logoUrl ? <img src={settings.logoUrl} alt="โลโก้ระบบ" className="brand-logo" /> : <img src="/logo-sdu.png" alt="โลโก้มหาวิทยาลัยสวนดุสิต" className="brand-logo" />}
-            <span>{settings.appName || "SmartLinkEdu"}</span>
+            <span className="brand-text">{settings.appName || "SmartLinkEdu"}</span>
           </a>
           <a href="/admin" className="admin-link">สำหรับผู้ดูแล <span>↗</span></a>
         </nav>
