@@ -14,7 +14,7 @@ const APP = {
   sessionTtlSeconds: 21600,
   maxLogoBytes: 1024 * 1024,
   resetCodeTtlSeconds: 900,
-  resetCodeMaxAttempts: 5,
+  resetGlobalMaxAttempts: 10,
   resetMaxRequestsPerHour: 3
 };
 
@@ -206,27 +206,38 @@ function forgotPassword_(body) {
 
   const genericMessage = "หากอีเมลนี้อยู่ในระบบ รหัสรีเซ็ตจะถูกส่งไปตามอีเมลดังกล่าว (โปรดตรวจสอบในกล่องจดหมาย)";
   const cache = CacheService.getScriptCache();
+  // Count every request per email, matched or not: if only the registered
+  // address accumulated, hitting the limit would itself reveal it.
   const requests = Number(cache.get("pwreq_" + email) || 0);
   if (requests >= APP.resetMaxRequestsPerHour) {
     return { ok: false, message: "ขอรหัสรีเซ็ตบ่อยเกินไป กรุณารอสักครู่แล้วลองใหม่" };
   }
-  // Same reply whether or not the email matches, so nobody can probe the
-  // registered address by observing responses.
+  cache.put("pwreq_" + email, String(requests + 1), 3600);
   if (email !== adminEmail) return { ok: true, message: genericMessage };
 
-  cache.put("pwreq_" + email, String(requests + 1), 3600);
-  const code = String(Math.floor(100000 + Math.random() * 900000));
+  const code = resetCode_();
+  try {
+    MailApp.sendEmail({
+      to: adminEmail,
+      subject: "SmartLinkEdu — รหัสรีเซ็ตรหัสผ่าน",
+      body: "รหัสรีเซ็ตรหัสผ่านของคุณคือ: " + code +
+        "\n\nรหัสนี้ใช้ได้ภายใน 15 นาที และใช้ได้เพียงครั้งเดียว" +
+        "\nหากคุณไม่ได้ขอรหัสนี้ กรุณาละเว้นอีเมลฉบับนี้" +
+        "\n\n— SmartLinkEdu"
+    });
+  } catch (err) {
+    // ponytail: honest failure beats masking; the brief send-error window is
+    // the only leak path and closes once mail authorization/quota is healthy.
+    console.error(err);
+    return { ok: false, message: "ระบบส่งอีเมลไม่สำเร็จชั่วคราว กรุณาลองใหม่ภายหลัง" };
+  }
   cache.put("pwcode_" + code, email, APP.resetCodeTtlSeconds);
-  cache.put("pwatt_" + code, "0", APP.resetCodeTtlSeconds);
-  MailApp.sendEmail({
-    to: adminEmail,
-    subject: "SmartLinkEdu — รหัสรีเซ็ตรหัสผ่าน",
-    body: "รหัสรีเซ็ตรหัสผ่านของคุณคือ: " + code +
-      "\n\nรหัสนี้ใช้ได้ภายใน 15 นาที และใช้ได้เพียงครั้งเดียว" +
-      "\nหากคุณไม่ได้ขอรหัสนี้ กรุณาละเว้นอีเมลฉบับนี้" +
-      "\n\n— SmartLinkEdu"
-  });
   return { ok: true, message: genericMessage };
+}
+
+function resetCode_() {
+  // 6 digits from the same secret helper used for session tokens.
+  return String(parseInt(randomSecret_().slice(0, 8), 16) % 1000000).padStart(6, "0");
 }
 
 function resetPassword_(body) {
@@ -234,15 +245,15 @@ function resetPassword_(body) {
   const newPassword = String(body.newPassword || "");
   if (newPassword.length < 12) return { ok: false, message: "รหัสผ่านใหม่ต้องมีอย่างน้อย 12 ตัวอักษร" };
   const cache = CacheService.getScriptCache();
+  // Cap ALL code guesses per 15-min window — a per-code counter alone can
+  // never throttle guesses of codes that were never issued.
+  const globalAttempts = Number(cache.get("pwatt_all") || 0);
+  if (globalAttempts >= APP.resetGlobalMaxAttempts) {
+    return { ok: false, message: "ลองรหัสรีเซ็ตหลายครั้งเกินไป กรุณารอสักครู่แล้วลองใหม่" };
+  }
+  cache.put("pwatt_all", String(globalAttempts + 1), APP.resetCodeTtlSeconds);
   const codeKey = "pwcode_" + code;
   if (!cache.get(codeKey)) return { ok: false, message: "โค้ดไม่ถูกต้องหรือหมดอายุ กรุณาขอโค้ดใหม่" };
-  const attempts = Number(cache.get("pwatt_" + code) || 0);
-  if (attempts >= APP.resetCodeMaxAttempts) {
-    cache.remove(codeKey);
-    cache.remove("pwatt_" + code);
-    return { ok: false, message: "กรอกโค้ดผิดหลายครั้งเกินไป กรุณาขอโค้ดใหม่" };
-  }
-  cache.put("pwatt_" + code, String(attempts + 1), APP.resetCodeTtlSeconds);
 
   const props = PropertiesService.getScriptProperties();
   const salt = randomSecret_().slice(0, 32);
@@ -252,7 +263,6 @@ function resetPassword_(body) {
     PASSWORD_CHANGE_REQUIRED: "false"
   });
   cache.remove(codeKey);
-  cache.remove("pwatt_" + code);
   return { ok: true, message: "ตั้งรหัสผ่านใหม่เรียบร้อย กรุณาเข้าสู่ระบบด้วยรหัสใหม่" };
 }
 
@@ -261,7 +271,9 @@ function isEmail_(value) {
 }
 
 function publicData_() {
-  return { ok: true, systems: readSystems_(), settings: readSettings_() };
+  const s = readSettings_();
+  // adminEmail must never reach the unauthenticated endpoint.
+  return { ok: true, systems: readSystems_(), settings: { appName: s.appName, logoUrl: s.logoUrl } };
 }
 
 function adminData_() {
