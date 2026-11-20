@@ -1,4 +1,4 @@
-# SmarklinkEdu deployment
+# SmartLinkEdu deployment
 
 ## Architecture
 
@@ -11,10 +11,10 @@
 
 1. Open the Apps Script project supplied by the project owner.
 2. Replace/add the contents of `gas/Code.gs` in the editor.
-3. Run `initializeSmarklinkEdu` once from the Apps Script editor and approve the requested Spreadsheet/Drive permissions.
+3. Run `initializeSmartLinkEdu` once from the Apps Script editor and approve the requested Spreadsheet/Drive permissions.
 4. Open the execution log. Copy the generated `API_SECRET` to Vercel. The function also logs a one-time temporary admin password. Store it privately; the first login must replace it with a new password.
 5. In Apps Script choose **Deploy → Manage deployments → Edit** the existing Web App deployment (or create a Web App deployment). Select **Execute as: Me** and **Who has access: Anyone**, then deploy a new version. Keep the same deployment URL when editing an existing deployment.
-6. Run `initializeSmarklinkEdu` only once for the initial setup. It is safe to rerun for sheet header repair, but it does not reset existing records or admin credentials.
+6. Run `initializeSmartLinkEdu` only once for the initial setup. It is safe to rerun for sheet header repair, but it does not reset existing records or admin credentials.
 
 The active Web App URL format is:
 `https://script.google.com/macros/s/YOUR_DEPLOYED_WEB_APP_ID/exec`
@@ -43,7 +43,7 @@ Connect repository `chookaittom-gif/Smartlinkedu` in Vercel → Project Settings
 
 ## 5. Notes
 
-- The Systems and Settings sheets are created automatically by `initializeSmarklinkEdu`.
+- The Systems and Settings sheets are created automatically by `initializeSmartLinkEdu`.
 - The initial 11 directory records are seeded only when the Systems sheet is empty.
 - Logo upload accepts PNG/JPG/WEBP up to 1 MB and creates a link-shared image in Google Drive.
 - Apps Script API access is protected by the server-side secret. Do not share the secret or expose it in client-side code.

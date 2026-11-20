@@ -1,5 +1,5 @@
 /**
- * SmarklinkEdu GAS backend
+ * SmartLinkEdu GAS backend
  * Install this file in the Apps Script project and deploy as a Web App:
  * Execute as: Me | Access: Anyone
  *
@@ -8,14 +8,14 @@
  */
 
 const APP = {
-  name: "SmarklinkEdu",
+  name: "SmartLinkEdu",
   systemsSheet: "Systems",
   settingsSheet: "Settings",
   sessionTtlSeconds: 21600,
   maxLogoBytes: 1024 * 1024
 };
 
-function initializeSmarklinkEdu() {
+function initializeSmartLinkEdu() {
   const props = PropertiesService.getScriptProperties();
   let spreadsheetId = props.getProperty("SPREADSHEET_ID");
   let spreadsheet;
@@ -23,7 +23,7 @@ function initializeSmarklinkEdu() {
   if (spreadsheetId) {
     spreadsheet = SpreadsheetApp.openById(spreadsheetId);
   } else {
-    spreadsheet = SpreadsheetApp.create("SmarklinkEdu Database");
+    spreadsheet = SpreadsheetApp.create("SmartLinkEdu Database");
     spreadsheetId = spreadsheet.getId();
     props.setProperty("SPREADSHEET_ID", spreadsheetId);
   }
@@ -68,7 +68,7 @@ function initializeSmarklinkEdu() {
     });
   }
 
-  Logger.log("SmarklinkEdu initialized.");
+  Logger.log("SmartLinkEdu initialized.");
   Logger.log("DATABASE_URL: " + spreadsheet.getUrl());
   Logger.log("API_SECRET (copy to Vercel GAS_API_SECRET): " + props.getProperty("API_SECRET"));
   if (initialPassword) {
@@ -257,7 +257,7 @@ function saveSettings_(settings) {
     if (bytes.length > APP.maxLogoBytes) return { ok: false, message: "ไฟล์โลโก้ต้องมีขนาดไม่เกิน 1 MB" };
     const mime = match[1];
     const ext = mime === "image/jpeg" ? "jpg" : mime.split("/")[1];
-    const blob = Utilities.newBlob(bytes, mime, "SmarklinkEdu-logo." + ext);
+    const blob = Utilities.newBlob(bytes, mime, "SmartLinkEdu-logo." + ext);
     const file = DriveApp.createFile(blob);
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
     logoUrl = "https://drive.google.com/uc?export=view&id=" + file.getId();
@@ -293,7 +293,7 @@ function setSetting_(sheet, key, value) {
 
 function getSpreadsheet_() {
   const id = PropertiesService.getScriptProperties().getProperty("SPREADSHEET_ID");
-  if (!id) throw new Error("ยังไม่ได้ตั้งค่าฐานข้อมูล กรุณารัน initializeSmarklinkEdu()");
+  if (!id) throw new Error("ยังไม่ได้ตั้งค่าฐานข้อมูล กรุณารัน initializeSmartLinkEdu()");
   return SpreadsheetApp.openById(id);
 }
 

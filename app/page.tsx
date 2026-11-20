@@ -26,7 +26,7 @@ async function api(action: string, extra: Record<string, unknown> = {}): Promise
 
 export default function HomePage() {
   const [systems, setSystems] = useState<System[]>([]);
-  const [settings, setSettings] = useState<Settings>({ appName: "SmarklinkEdu", logoUrl: "" });
+  const [settings, setSettings] = useState<Settings>({ appName: "SmartLinkEdu", logoUrl: "" });
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("ทั้งหมด");
   const [loading, setLoading] = useState(true);
@@ -37,7 +37,7 @@ export default function HomePage() {
       .then((data) => {
         if (!data.ok) throw new Error(data.message || "โหลดข้อมูลไม่สำเร็จ");
         setSystems(data.systems ?? []);
-        setSettings(data.settings ?? { appName: "SmarklinkEdu", logoUrl: "" });
+        setSettings(data.settings ?? { appName: "SmartLinkEdu", logoUrl: "" });
       })
       .catch((err: unknown) => setError(err instanceof Error ? err.message : "เกิดข้อผิดพลาด"))
       .finally(() => setLoading(false));
@@ -63,7 +63,7 @@ export default function HomePage() {
         <nav className="topbar shell">
           <a href="/" className="brand">
             {settings.logoUrl ? <img src={settings.logoUrl} alt="โลโก้ระบบ" className="brand-logo" /> : <span className="brand-mark">S</span>}
-            <span>{settings.appName || "SmarklinkEdu"}</span>
+            <span>{settings.appName || "SmartLinkEdu"}</span>
           </a>
           <a href="/admin" className="admin-link">สำหรับผู้ดูแล <span>↗</span></a>
         </nav>
@@ -111,10 +111,10 @@ export default function HomePage() {
 
       <footer className="site-footer">
         <div className="footer-inner">
-          <div className="footer-brand"><span className="brand-mark small-mark">S</span><strong>{settings.appName || "SmarklinkEdu"}</strong></div>
+          <div className="footer-brand"><span className="brand-mark small-mark">S</span><strong>{settings.appName || "SmartLinkEdu"}</strong></div>
           <div className="footer-credit">ผู้พัฒนา โดย นายชูเกียรติ กุศลสถิตย์</div>
           <div className="footer-credit">มหาวิทยาลัยสวนดุสิต ศูนย์การศึกษาลำปาง</div>
-          <div className="footer-copy">© {new Date().getFullYear()} SmarklinkEdu · Digital Campus Directory</div>
+          <div className="footer-copy">© {new Date().getFullYear()} SmartLinkEdu · Digital Campus Directory</div>
         </div>
       </footer>
     </main>

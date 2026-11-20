@@ -21,7 +21,7 @@ export default function AdminPage() {
   const [mustChangePassword, setMustChangePassword] = useState(false);
   const [newPassword, setNewPassword] = useState("");
   const [systems, setSystems] = useState<System[]>([]);
-  const [settings, setSettings] = useState<Settings>({ appName: "SmarklinkEdu", logoUrl: "" });
+  const [settings, setSettings] = useState<Settings>({ appName: "SmartLinkEdu", logoUrl: "" });
   const [editing, setEditing] = useState<System | null>(null);
   const [tab, setTab] = useState<"systems" | "settings">("systems");
   const [busy, setBusy] = useState(false);
@@ -31,7 +31,7 @@ export default function AdminPage() {
     const result = await api("adminData");
     if (!result.ok) { setLoggedIn(false); return; }
     setSystems(result.systems ?? []);
-    setSettings(result.settings ?? { appName: "SmarklinkEdu", logoUrl: "" });
+    setSettings(result.settings ?? { appName: "SmartLinkEdu", logoUrl: "" });
     setLoggedIn(true);
   }
 
@@ -104,7 +104,7 @@ export default function AdminPage() {
   async function logout() { await api("logout"); setLoggedIn(false); setUser(""); }
 
   if (!loggedIn) return <main className="admin-page"><a className="back-home" href="/">← กลับหน้าหลัก</a><form className="login-card" onSubmit={handleLogin}>
-    <div className="brand-mark login-mark">S</div><div className="eyebrow dark-eyebrow">ADMIN ACCESS</div><h1>เข้าสู่ระบบผู้ดูแล</h1><p>จัดการข้อมูลระบบสารสนเทศ SmarklinkEdu</p>
+    <div className="brand-mark login-mark">S</div><div className="eyebrow dark-eyebrow">ADMIN ACCESS</div><h1>เข้าสู่ระบบผู้ดูแล</h1><p>จัดการข้อมูลระบบสารสนเทศ SmartLinkEdu</p>
     <label>ชื่อผู้ใช้<input required autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="ชื่อผู้ใช้ผู้ดูแล" /></label>
     <label>รหัสผ่าน<input required type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="กรอกรหัสผ่าน" /></label>
     {message && <div className="notice error-state">{message}</div>}
@@ -112,7 +112,7 @@ export default function AdminPage() {
   </form></main>;
 
   return <main className="admin-page"><div className="admin-shell">
-    <header className="admin-header"><a className="brand" href="/"><span className="brand-mark">S</span><span>SmarklinkEdu Admin</span></a><div><span className="admin-user">ผู้ดูแล: {user}</span><button className="text-button" onClick={logout}>ออกจากระบบ</button></div></header>
+    <header className="admin-header"><a className="brand" href="/"><span className="brand-mark">S</span><span>SmartLinkEdu Admin</span></a><div><span className="admin-user">ผู้ดูแล: {user}</span><button className="text-button" onClick={logout}>ออกจากระบบ</button></div></header>
     {message && <div className="notice">{message}</div>}
     {mustChangePassword ? <form className="panel password-panel" onSubmit={savePassword}><h2>ตั้งรหัสผ่านใหม่</h2><p>กรุณาเปลี่ยนรหัสผ่านชั่วคราวก่อนเริ่มใช้งาน</p><label>รหัสผ่านใหม่<input type="password" minLength={12} required value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="อย่างน้อย 12 ตัวอักษร" /></label><button className="primary-action" disabled={busy}>บันทึกรหัสผ่านใหม่</button></form> : <>
       <div className="admin-title"><div><div className="eyebrow dark-eyebrow">CONTROL CENTER</div><h1>จัดการระบบสารสนเทศ</h1></div><span className="result-count">{systems.length} ระบบ</span></div>
