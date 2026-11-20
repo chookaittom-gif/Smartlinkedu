@@ -320,7 +320,9 @@ function getSeedSystems_() {
     ["ระบบปฏิทินการปฏิบัติงาน", "", "https://thlink.info/calendarsdu", "", "งานสำนักงาน", "🗓️", 8],
     ["ระบบเบิกจ่ายพัสดุ", "", "https://108links.com/sre", "", "งานสำนักงาน", "📦", 9],
     ["ระบบครุภัณฑ์สำนักงาน", "", "https://dun.ct.ws/?p=ams", "", "งานสำนักงาน", "🗄️", 10],
-    ["ระบบจองห้องประชุม", "", "https://108links.com/meeting-room", "", "การจอง", "🪑", 11]
+    ["ระบบจองห้องประชุม", "", "https://108links.com/meeting-room", "", "การจอง", "🪑", 11],
+    ["ระบบยืม-คืนอุปกรณ์ (ละอออุทิศ)", "", "https://108links.com/equipment-b", "https://canva.link/x12cx5tq3p2a7ki", "งานบริการ", "🧰", 12],
+    ["ระบบยืม-คืนอุปกรณ์ (สาขาอาหาร)", "", "https://equipment-psi.vercel.app", "https://canva.link/x12cx5tq3p2a7ki", "งานบริการ", "🧰", 13]
   ];
   return rows.map(row => [
     Utilities.getUuid(), row[0], row[1], row[2], row[3], row[4], row[5], row[6], new Date().toISOString()
