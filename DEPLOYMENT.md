@@ -16,17 +16,19 @@
 5. In Apps Script choose **Deploy → Manage deployments → Edit** the existing Web App deployment (or create a Web App deployment). Select **Execute as: Me** and **Who has access: Anyone**, then deploy a new version. Keep the same deployment URL when editing an existing deployment.
 6. Run `initializeSmarklinkEdu` only once for the initial setup. It is safe to rerun for sheet header repair, but it does not reset existing records or admin credentials.
 
-The current deployment URL supplied for this project is:
-`https://script.google.com/macros/s/AKfycbxSTS9D35bVMYhTOiekDWrBsi7PdSGt-C7Eo666HygXT7jBOPv8xFxn3xpd0wakMShu/exec`
+The active Web App URL format is:
+`https://script.google.com/macros/s/YOUR_DEPLOYED_WEB_APP_ID/exec`
+
+> **Important:** Always use the active `/exec` URL created **after** pasting `gas/Code.gs` and deploying a Web App version that includes `doGet` and `doPost`. Using a stale or empty deployment URL created before `gas/Code.gs` was deployed will return an Apps Script HTML error page (`ไม่พบฟังก์ชันของสคริปต์: doPost`) instead of JSON.
 
 ## 2. Configure Vercel
 
 In Vercel Project → Settings → Environment Variables, add these for **Production**, **Preview**, and **Development** as appropriate:
 
-- `GAS_WEB_APP_URL` = the Apps Script Web App URL ending in `/exec`
+- `GAS_WEB_APP_URL` = the active Apps Script Web App URL ending in `/exec` (created after pasting and deploying `gas/Code.gs`)
 - `GAS_API_SECRET` = the `API_SECRET` printed by the Apps Script initialization function
 
-Do not prefix these variables with `NEXT_PUBLIC_`. Never commit the values to GitHub. Redeploy after saving the environment variables.
+Do not prefix these variables with `NEXT_PUBLIC_`. Never commit real secrets to GitHub. **Redeploy** Vercel after adding or updating Environment Variables so the new values take effect.
 
 ## 3. Link GitHub to Vercel
 

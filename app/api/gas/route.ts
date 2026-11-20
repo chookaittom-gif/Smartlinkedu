@@ -3,10 +3,23 @@ import { cookies } from "next/headers";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 30;
 
 const SESSION_COOKIE = "smarklink_session";
 const SESSION_MAX_AGE = 6 * 60 * 60;
+const GAS_FETCH_TIMEOUT_MS = 15_000;
+const ERROR_PREVIEW_MAX_LENGTH = 240;
 const GOOGLE_CONTENT_HOSTS = new Set(["script.googleusercontent.com", "script.google.com"]);
+const HTML_ENTITIES: Record<string, string> = {
+  "&amp;": "&",
+  "&lt;": "<",
+  "&gt;": ">",
+  "&quot;": "\"",
+  "&apos;": "'",
+  "&#39;": "'",
+  "&#x27;": "'",
+  "&nbsp;": " ",
+};
 
 type GasReply = {
   response: Response;
@@ -33,7 +46,63 @@ function delay(ms: number) {
 
 function isAppsScriptExec(url: URL) {
   return url.hostname === "script.google.com" &&
-    /\/macros\/s\/[^/]+\/exec\/?$/.test(url.pathname);
+    /\/(?:a\/macros\/[^/]+|macros)\/s\/[^/]+\/exec\/?$/.test(url.pathname);
+}
+
+function decodeHtmlEntities(text: string): string {
+  return text.replace(
+    /&(?:amp|lt|gt|quot|apos|#39|#x27|nbsp);/gi,
+    (entity) => HTML_ENTITIES[entity.toLowerCase()] ?? entity,
+  );
+}
+
+function cleanHtmlFragment(fragment: string): string {
+  return decodeHtmlEntities(fragment.replace(/<[^>]+>/g, " "))
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function truncatePreview(text: string, maxLength = ERROR_PREVIEW_MAX_LENGTH): string {
+  const normalized = text.replace(/\s+/g, " ").trim();
+  if (normalized.length <= maxLength) return normalized;
+  return `${normalized.slice(0, maxLength - 3).trimEnd()}...`;
+}
+
+function formatErrorPreview(raw: string, contentType: string): string {
+  const looksLikeHtml =
+    contentType.toLowerCase().includes("text/html") ||
+    /^\s*(?:<!doctype\s+html|<html\b|<head\b|<body\b|<script\b)/i.test(raw);
+
+  if (!looksLikeHtml) {
+    return truncatePreview(raw);
+  }
+
+  const stripped = raw
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, " ")
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style\s*>/gi, " ")
+    .replace(/<!--[\s\S]*?-->/g, " ");
+
+  const titleMatch = stripped.match(/<title\b[^>]*>([\s\S]*?)<\/title\s*>/i);
+  const title = titleMatch ? cleanHtmlFragment(titleMatch[1]) : "";
+
+  const bodyMatch = stripped.match(/<body\b[^>]*>([\s\S]*?)(?:<\/body\s*>|$)/i);
+  const bodySource = bodyMatch
+    ? bodyMatch[1]
+    : stripped
+        .replace(/<head\b[^>]*>[\s\S]*?<\/head\s*>/gi, " ")
+        .replace(/<title\b[^>]*>[\s\S]*?<\/title\s*>/gi, " ");
+  const bodyText = cleanHtmlFragment(bodySource);
+
+  let combined = "";
+  if (title && bodyText) {
+    combined = bodyText.toLowerCase().startsWith(title.toLowerCase())
+      ? bodyText
+      : `${title}: ${bodyText}`;
+  } else {
+    combined = title || bodyText;
+  }
+
+  return truncatePreview(combined || raw);
 }
 
 async function getContentResponse(startUrl: URL): Promise<GasReply> {
@@ -68,7 +137,7 @@ async function getContentResponse(startUrl: URL): Promise<GasReply> {
       method: "GET",
       cache: "no-store",
       redirect: "manual",
-      signal: AbortSignal.timeout(7_000),
+      signal: AbortSignal.timeout(GAS_FETCH_TIMEOUT_MS),
     });
 
     if (response.status >= 300 && response.status < 400) {
@@ -94,7 +163,7 @@ async function getContentResponse(startUrl: URL): Promise<GasReply> {
           method: "GET",
           cache: "no-store",
           redirect: "manual",
-          signal: AbortSignal.timeout(7_000),
+          signal: AbortSignal.timeout(GAS_FETCH_TIMEOUT_MS),
         });
         if (response.status >= 300 && response.status < 400) {
           const location = response.headers.get("location");
@@ -131,7 +200,7 @@ async function callGas(gasUrl: string, requestBody: string): Promise<GasReply> {
     body: requestBody,
     cache: "no-store",
     redirect: "manual",
-    signal: AbortSignal.timeout(7_000),
+    signal: AbortSignal.timeout(GAS_FETCH_TIMEOUT_MS),
   });
 
   if (initial.status >= 300 && initial.status < 400) {
@@ -148,8 +217,8 @@ async function callGas(gasUrl: string, requestBody: string): Promise<GasReply> {
 }
 
 export async function POST(request: NextRequest) {
-  const gasUrl = process.env.GAS_WEB_APP_URL;
-  const apiSecret = process.env.GAS_API_SECRET;
+  const gasUrl = process.env.GAS_WEB_APP_URL?.trim();
+  const apiSecret = process.env.GAS_API_SECRET?.trim();
 
   if (!gasUrl || !apiSecret) {
     return NextResponse.json(
@@ -199,7 +268,8 @@ export async function POST(request: NextRequest) {
       const contentType = reply.response.headers.get("content-type") || "unknown";
       let host = "unknown";
       try { host = new URL(reply.url).hostname; } catch { /* ignore malformed URL */ }
-      const preview = reply.raw.replace(/\s+/g, " ").slice(0, 180);
+      const preview = formatErrorPreview(reply.raw, contentType);
+      const previewText = preview ? ` ${preview}` : "";
       const detail = reply.detail ? ` ${reply.detail}.` : "";
       const retryHint = safeToRetryPost
         ? " ลองโหลดหน้าใหม่อีกครั้งได้ เพราะคำขอนี้เป็นการอ่านข้อมูล"
@@ -207,7 +277,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           ok: false,
-          message: `GAS ไม่ได้ส่ง JSON (HTTP ${reply.response.status}, Content-Type ${contentType}, host ${host}).${detail} ${preview}${retryHint}`.trim(),
+          message: `GAS ไม่ได้ส่ง JSON (HTTP ${reply.response.status}, Content-Type ${contentType}, host ${host}).${detail}${previewText}${retryHint}`.trim(),
         },
         { status: 502 },
       );
