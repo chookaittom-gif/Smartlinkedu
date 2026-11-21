@@ -62,7 +62,7 @@ export default function HomePage() {
         <div className="hero-glow glow-two" />
         <nav className="topbar shell">
           <a href="/" className="brand">
-            {settings.logoUrl ? <img src={settings.logoUrl} alt="โลโก้ระบบ" className="brand-logo" /> : <img src="/logo-sdu.png" alt="โลโก้มหาวิทยาลัยสวนดุสิต" className="brand-logo" />}
+            {settings.logoUrl ? <img src={settings.logoUrl} alt="โลโก้ระบบ" width={100} height={128} className="brand-logo" /> : <img src="/logo-sdu.webp" alt="โลโก้มหาวิทยาลัยสวนดุสิต" width={100} height={128} className="brand-logo" />}
             <span className="brand-text">{settings.appName || "SmartLinkEdu"}</span>
           </a>
           <a href="/admin" className="admin-link">สำหรับผู้ดูแล <span>↗</span></a>
