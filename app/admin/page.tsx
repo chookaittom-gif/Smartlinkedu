@@ -123,6 +123,14 @@ export default function AdminPage() {
     finally { setBusy(false); }
   }
 
+  const editingOpen = editing !== null;
+  useEffect(() => {
+    if (!editingOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setEditing(null); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [editingOpen]);
+
   async function saveSystem(e: FormEvent) {
     e.preventDefault(); if (!editing) return; setBusy(true); setMessage("");
     try {
@@ -191,15 +199,18 @@ export default function AdminPage() {
       <div className="admin-title"><div><div className="eyebrow dark-eyebrow">CONTROL CENTER</div><h1>จัดการระบบสารสนเทศ</h1></div><span className="result-count">{systems.length} ระบบ</span></div>
       <div className="admin-tabs"><button className={tab === "systems" ? "active" : ""} onClick={() => setTab("systems")}>จัดการระบบ</button><button className={tab === "settings" ? "active" : ""} onClick={() => setTab("settings")}>ตั้งค่าระบบ</button></div>
       {tab === "systems" ? <section className="panel"><div className="panel-heading"><div><h2>รายการระบบ</h2><p>เพิ่ม แก้ไข ลบ และกำหนดลำดับการแสดงผล</p></div><button className="primary-action" onClick={() => setEditing(blankSystem())}>＋ เพิ่มระบบ</button></div>
-        {editing && <form className="edit-form" onSubmit={saveSystem}><h3>{editing.id ? "แก้ไขระบบ" : "เพิ่มระบบใหม่"}</h3>
-          <label>ชื่อระบบ<input required value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} /></label>
-          <div className="form-row"><label>เวอร์ชัน<input value={editing.version} onChange={(e) => setEditing({ ...editing, version: e.target.value })} placeholder="เช่น V.1.0" /></label><label>หมวดหมู่<input value={editing.category} onChange={(e) => setEditing({ ...editing, category: e.target.value })} /></label><label>ไอคอน<input value={editing.icon} onChange={(e) => setEditing({ ...editing, icon: e.target.value })} /></label><label>ลำดับ<input type="number" value={editing.sortOrder} onChange={(e) => setEditing({ ...editing, sortOrder: Number(e.target.value) })} /></label></div>
-          <label>URL ระบบ<input required type="url" value={editing.url} onChange={(e) => setEditing({ ...editing, url: e.target.value })} /></label><label>URL คู่มือ (เว้นว่างหากยังไม่มี)<input type="url" value={editing.manualUrl} onChange={(e) => setEditing({ ...editing, manualUrl: e.target.value })} /></label>
-          <div className="form-actions"><button type="button" className="secondary-action" onClick={() => setEditing(null)}>ยกเลิก</button><button className="primary-action" disabled={busy}>บันทึก</button></div>
-        </form>}
         <div className="admin-list">{systems.slice().sort((a,b) => a.sortOrder-b.sortOrder).map((s) => <div className="admin-row" key={s.id}><span className="admin-row-icon">{s.icon || "▣"}</span><div className="admin-row-info"><strong>{s.name}</strong><small>{s.url}</small></div><span className="order-badge">#{s.sortOrder}</span><button className="secondary-action" onClick={() => setEditing({ ...s })}>แก้ไข</button><button className="danger-button" onClick={() => deleteSystem(s.id)}>ลบ</button></div>)}</div>
       </section> : <><section className="panel"><h2>ตั้งค่าระบบรวมลิงก์</h2><p>เปลี่ยนชื่อระบบ โลโก้ และอีเมลผู้ดูแล</p><form className="edit-form" onSubmit={saveSettings}><label>ชื่อระบบ<input required value={settings.appName} onChange={(e) => setSettings({ ...settings, appName: e.target.value })} /></label><label>โลโก้ระบบ<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => void uploadLogo(e.target.files?.[0])} /></label>{settings.logoUrl && <img className="settings-logo" src={settings.logoUrl} alt="โลโก้ปัจจุบัน" />}<label>อีเมลผู้ดูแล (ใช้รับรหัสรีเซ็ตรหัสผ่าน)<input type="email" value={settings.adminEmail ?? ""} onChange={(e) => setSettings({ ...settings, adminEmail: e.target.value })} placeholder="admin@example.com" /></label><button className="primary-action" disabled={busy}>บันทึกการตั้งค่า</button></form></section>
         <section className="panel password-panel"><h2>เปลี่ยนรหัสผ่าน</h2><p>ตรวจสอบรหัสผ่านปัจจุบันก่อนตั้งรหัสผ่านใหม่</p><form className="edit-form" onSubmit={changeOwnPassword}><label>รหัสผ่านปัจจุบัน<PasswordInput required autoComplete="current-password" value={pwCurrent} onChange={(e) => setPwCurrent(e.target.value)} /></label><label>รหัสผ่านใหม่<PasswordInput required minLength={12} autoComplete="new-password" value={pwNew1} onChange={(e) => setPwNew1(e.target.value)} placeholder="อย่างน้อย 12 ตัวอักษร" /></label><label>ยืนยันรหัสผ่านใหม่<PasswordInput required minLength={12} autoComplete="new-password" value={pwNew2} onChange={(e) => setPwNew2(e.target.value)} placeholder="พิมพ์รหัสผ่านใหม่อีกครั้ง" /></label>{pwMsg && <div className={pwErr ? "notice error-state" : "notice"}>{pwMsg}</div>}<button className="primary-action" disabled={busy}>เปลี่ยนรหัสผ่าน</button></form></section></>}
     </>}
+      {editing && <div className="modal-overlay" role="presentation" onClick={(e) => { if (e.target === e.currentTarget) setEditing(null); }}>
+        <form className="edit-form modal-card" onSubmit={saveSystem}>
+          <div className="modal-head"><h3>{editing.id ? "แก้ไขระบบ" : "เพิ่มระบบใหม่"}</h3><button type="button" className="modal-close" onClick={() => setEditing(null)} aria-label="ปิดหน้าต่างแก้ไข">✕</button></div>
+          <label>ชื่อระบบ<input required value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} /></label>
+          <div className="form-row"><label>เวอร์ชัน<input value={editing.version} onChange={(e) => setEditing({ ...editing, version: e.target.value })} placeholder="เช่น V.1.0" /></label><label>หมวดหมู่<input value={editing.category} onChange={(e) => setEditing({ ...editing, category: e.target.value })} /></label><label>ไอคอน<input value={editing.icon} onChange={(e) => setEditing({ ...editing, icon: e.target.value })} /></label><label>ลำดับ<input type="number" value={editing.sortOrder} onChange={(e) => setEditing({ ...editing, sortOrder: Number(e.target.value) })} /></label></div>
+          <label>URL ระบบ<input required type="url" value={editing.url} onChange={(e) => setEditing({ ...editing, url: e.target.value })} /></label><label>URL คู่มือ (เว้นว่างหากยังไม่มี)<input type="url" value={editing.manualUrl} onChange={(e) => setEditing({ ...editing, manualUrl: e.target.value })} /></label>
+          <div className="form-actions"><button type="button" className="secondary-action" onClick={() => setEditing(null)}>ยกเลิก</button><button className="primary-action" disabled={busy}>บันทึก</button></div>
+        </form>
+      </div>}
   </div></main>;
 }
