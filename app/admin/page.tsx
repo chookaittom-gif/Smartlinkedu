@@ -37,6 +37,7 @@ export default function AdminPage() {
   const [editing, setEditing] = useState<System | null>(null);
   const [iconPicker, setIconPicker] = useState(false);
   const [categoryPicker, setCategoryPicker] = useState(false);
+  const [deleting, setDeleting] = useState<System | null>(null);
   const [tab, setTab] = useState<"systems" | "settings">("systems");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -129,15 +130,15 @@ export default function AdminPage() {
 
   const categoryOptions = Array.from(new Set(systems.map((s) => s.category).filter(Boolean)));
   const categorySuggestions = Array.from(new Set([...CATEGORY_CHOICES, ...categoryOptions]));
-  const editingOpen = editing !== null;
+  const dialogOpen = editing !== null || deleting !== null;
   useEffect(() => {
-    if (!editingOpen) return;
+    if (!dialogOpen) return;
     setIconPicker(false);
     setCategoryPicker(false);
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setEditing(null); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") { setEditing(null); setDeleting(null); } };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [editingOpen]);
+  }, [dialogOpen]);
 
   async function saveSystem(e: FormEvent) {
     e.preventDefault(); if (!editing) return; setBusy(true); setMessage("");
@@ -149,11 +150,15 @@ export default function AdminPage() {
     finally { setBusy(false); }
   }
 
-  async function deleteSystem(id: string) {
-    if (!confirm("ยืนยันลบระบบนี้หรือไม่?")) return;
-    const result = await api("deleteSystem", { id });
-    setMessage(result.message || (result.ok ? "ลบเรียบร้อย" : "ลบไม่สำเร็จ"));
-    if (result.ok) await loadDashboard();
+  async function deleteSystem() {
+    if (!deleting) return;
+    setBusy(true);
+    try {
+      const result = await api("deleteSystem", { id: deleting.id });
+      setMessage(result.message || (result.ok ? "ลบเรียบร้อย" : "ลบไม่สำเร็จ"));
+      if (result.ok) { setDeleting(null); await loadDashboard(); }
+    } catch { setMessage("เกิดข้อผิดพลาดในการลบ"); }
+    finally { setBusy(false); }
   }
 
   async function saveSettings(e: FormEvent) {
@@ -207,7 +212,7 @@ export default function AdminPage() {
       <div className="admin-title"><div><div className="eyebrow dark-eyebrow">CONTROL CENTER</div><h1>จัดการระบบสารสนเทศ</h1></div><span className="result-count">{systems.length} ระบบ</span></div>
       <div className="admin-tabs"><button className={tab === "systems" ? "active" : ""} onClick={() => setTab("systems")}>จัดการระบบ</button><button className={tab === "settings" ? "active" : ""} onClick={() => setTab("settings")}>ตั้งค่าระบบ</button></div>
       {tab === "systems" ? <section className="panel"><div className="panel-heading"><div><h2>รายการระบบ</h2><p>เพิ่ม แก้ไข ลบ และกำหนดลำดับการแสดงผล</p></div><button className="primary-action" onClick={() => setEditing(blankSystem())}>＋ เพิ่มระบบ</button></div>
-        <div className="admin-list">{systems.slice().sort((a,b) => a.sortOrder-b.sortOrder).map((s) => <div className="admin-row" key={s.id}><span className="admin-row-icon">{s.icon || "▣"}</span><div className="admin-row-info"><strong>{s.name}</strong><small>{s.url}</small></div><span className="order-badge">#{s.sortOrder}</span><button className="secondary-action" onClick={() => setEditing({ ...s })}>แก้ไข</button><button className="danger-button" onClick={() => deleteSystem(s.id)}>ลบ</button></div>)}</div>
+        <div className="admin-list">{systems.slice().sort((a,b) => a.sortOrder-b.sortOrder).map((s) => <div className="admin-row" key={s.id}><span className="admin-row-icon">{s.icon || "▣"}</span><div className="admin-row-info"><strong>{s.name}</strong><small>{s.url}</small></div><span className="order-badge">#{s.sortOrder}</span><button className="secondary-action" onClick={() => setEditing({ ...s })}>แก้ไข</button><button className="danger-button" onClick={() => setDeleting(s)}>ลบ</button></div>)}</div>
       </section> : <><section className="panel"><h2>ตั้งค่าระบบรวมลิงก์</h2><p>เปลี่ยนชื่อระบบ โลโก้ และอีเมลผู้ดูแล</p><form className="edit-form" onSubmit={saveSettings}><label>ชื่อระบบ<input required value={settings.appName} onChange={(e) => setSettings({ ...settings, appName: e.target.value })} /></label><label>โลโก้ระบบ<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => void uploadLogo(e.target.files?.[0])} /></label>{settings.logoUrl && <img className="settings-logo" src={settings.logoUrl} alt="โลโก้ปัจจุบัน" />}<label>อีเมลผู้ดูแล (ใช้รับรหัสรีเซ็ตรหัสผ่าน)<input type="email" value={settings.adminEmail ?? ""} onChange={(e) => setSettings({ ...settings, adminEmail: e.target.value })} placeholder="admin@example.com" /></label><button className="primary-action" disabled={busy}>บันทึกการตั้งค่า</button></form></section>
         <section className="panel password-panel"><h2>เปลี่ยนรหัสผ่าน</h2><p>ตรวจสอบรหัสผ่านปัจจุบันก่อนตั้งรหัสผ่านใหม่</p><form className="edit-form" onSubmit={changeOwnPassword}><label>รหัสผ่านปัจจุบัน<PasswordInput required autoComplete="current-password" value={pwCurrent} onChange={(e) => setPwCurrent(e.target.value)} /></label><label>รหัสผ่านใหม่<PasswordInput required minLength={12} autoComplete="new-password" value={pwNew1} onChange={(e) => setPwNew1(e.target.value)} placeholder="อย่างน้อย 12 ตัวอักษร" /></label><label>ยืนยันรหัสผ่านใหม่<PasswordInput required minLength={12} autoComplete="new-password" value={pwNew2} onChange={(e) => setPwNew2(e.target.value)} placeholder="พิมพ์รหัสผ่านใหม่อีกครั้ง" /></label>{pwMsg && <div className={pwErr ? "notice error-state" : "notice"}>{pwMsg}</div>}<button className="primary-action" disabled={busy}>เปลี่ยนรหัสผ่าน</button></form></section></>}
     </>}
@@ -219,6 +224,14 @@ export default function AdminPage() {
           <label>URL ระบบ<input required type="url" value={editing.url} onChange={(e) => setEditing({ ...editing, url: e.target.value })} /></label><label>URL คู่มือ (เว้นว่างหากยังไม่มี)<input type="url" value={editing.manualUrl} onChange={(e) => setEditing({ ...editing, manualUrl: e.target.value })} /></label>
           <div className="form-actions"><button type="button" className="secondary-action" onClick={() => setEditing(null)}>ยกเลิก</button><button className="primary-action" disabled={busy}>บันทึก</button></div>
         </form>
+      </div>}
+      {deleting && <div className="modal-overlay" role="presentation" onClick={(e) => { if (e.target === e.currentTarget) setDeleting(null); }}>
+        <div className="modal-card confirm-card" role="alertdialog" aria-modal="true" aria-labelledby="delete-dialog-title">
+          <div className="modal-head"><h3 id="delete-dialog-title">ลบระบบ</h3><button type="button" className="modal-close" onClick={() => setDeleting(null)} aria-label="ปิด">✕</button></div>
+          <div className="confirm-target"><span className="admin-row-icon">{deleting.icon || "▣"}</span><div className="admin-row-info"><strong>{deleting.name}</strong><small>{deleting.url}</small></div></div>
+          <p className="confirm-text">ยืนยันลบระบบนี้หรือไม่? การลบจะไม่สามารถย้อนกลับได้</p>
+          <div className="form-actions"><button type="button" className="secondary-action" onClick={() => setDeleting(null)}>ยกเลิก</button><button className="danger-action" disabled={busy} onClick={() => void deleteSystem()}>{busy ? "กำลังลบ..." : "ลบระบบ"}</button></div>
+        </div>
       </div>}
   </div></main>;
 }
