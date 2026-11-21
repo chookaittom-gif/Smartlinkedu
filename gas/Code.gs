@@ -11,7 +11,7 @@ const APP = {
   name: "SmartLinkEdu",
   systemsSheet: "Systems",
   settingsSheet: "Settings",
-  sessionTtlSeconds: 21600,
+  sessionTtlSeconds: 28800,
   maxLogoBytes: 1024 * 1024,
   resetCodeTtlSeconds: 900,
   resetGlobalMaxAttempts: 10,
@@ -116,7 +116,7 @@ function doPost(e) {
       case "changePassword":
         return json_(changePassword_(body));
       case "logout":
-        CacheService.getScriptCache().remove("session_" + String(body.sessionToken || ""));
+        PropertiesService.getScriptProperties().deleteProperty("SESSION_" + String(body.sessionToken || ""));
         return json_({ ok: true, message: "ออกจากระบบแล้ว" });
       case "saveSystem":
         return json_(saveSystem_(body.system || {}));
@@ -159,8 +159,9 @@ function login_(body) {
   }
 
   cache.remove(rateKey);
+  pruneExpiredSessions_(props);
   const token = randomSecret_() + randomSecret_();
-  cache.put("session_" + token, username, APP.sessionTtlSeconds);
+  props.setProperty("SESSION_" + token, username + "|" + (Date.now() + APP.sessionTtlSeconds * 1000));
   return {
     ok: true,
     user: username,
@@ -171,7 +172,27 @@ function login_(body) {
 
 function requireSession_(token) {
   if (!token) return null;
-  return CacheService.getScriptCache().get("session_" + String(token));
+  const props = PropertiesService.getScriptProperties();
+  const raw = props.getProperty("SESSION_" + String(token));
+  if (!raw) return null;
+  const sep = raw.lastIndexOf("|");
+  const username = raw.slice(0, sep);
+  const expiry = Number(raw.slice(sep + 1));
+  if (username && expiry > Date.now()) return username;
+  props.deleteProperty("SESSION_" + String(token));
+  return null;
+}
+
+// Script Properties keep sessions past the 6-hour CacheService TTL cap; prune
+// expired ones on login so the store does not grow without bound.
+function pruneExpiredSessions_(props) {
+  const now = Date.now();
+  const all = props.getProperties();
+  Object.keys(all).forEach(key => {
+    if (key.indexOf("SESSION_") !== 0) return;
+    const expiry = Number(String(all[key]).split("|").pop());
+    if (!expiry || now > expiry) props.deleteProperty(key);
+  });
 }
 
 function changePassword_(body) {

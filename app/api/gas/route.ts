@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 const SESSION_COOKIE = "smartlink_session";
-const SESSION_MAX_AGE = 6 * 60 * 60;
+const SESSION_MAX_AGE = 8 * 60 * 60;
 const GAS_FETCH_TIMEOUT_MS = 55_000;
 const ERROR_PREVIEW_MAX_LENGTH = 240;
 const GOOGLE_CONTENT_HOSTS = new Set(["script.googleusercontent.com", "script.google.com"]);
