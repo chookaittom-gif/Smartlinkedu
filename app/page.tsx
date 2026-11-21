@@ -72,7 +72,7 @@ export default function HomePage() {
           <h1>ทุกระบบที่ต้องใช้<br /><span>รวมไว้ในที่เดียว</span></h1>
           <p>ศูนย์รวมระบบสารสนเทศ มหาวิทยาลัยสวนดุสิต<br className="desktop-break" /> ศูนย์การศึกษาลำปาง</p>
           <div className="search-wrap">
-            <span className="search-icon">⌕</span>
+            <span className="search-icon" aria-hidden="true">⌕</span>
             <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="ค้นหาระบบที่ต้องการ..." aria-label="ค้นหาระบบ" />
             <kbd>ค้นหา</kbd>
           </div>

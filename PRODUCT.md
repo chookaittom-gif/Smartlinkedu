@@ -39,7 +39,7 @@ web
 
 - ชื่อ SmartLinkEdu; eyebrow "DIGITAL CAMPUS DIRECTORY"
 - ฟอนต์: Kanit (ไทย) + DM Sans (latin) — self-host ผ่าน next/font ตั้งแต่ 2026-11-21
-- ไอเดนติตี้สี: ไล่เฉด blue→purple→teal `linear-gradient(90deg,#315be8,#7862e8 52%,#20b7b2)` บนข้อความแบรนด์/h1
+- ไอเดนติตี้สี: ไล่เฉด blue→purple→teal `linear-gradient(90deg,#315be8,#7862e8 52%,#0e9488)` บนข้อความแบรนด์/h1 (teal เข้มขึ้นจาก #20b7b2 เมื่อ 2026-11-21 เพื่อผ่าน AA-large — ผู้ใช้เลือกเอง)
 - Header = ตรา SDU (พื้นหลังโปร่งใส, default `/logo-sdu.webp`), Footer = ตรา "S" ม่วง + เครดิต "ผู้พัฒนาโดย นายชูเกียรติ กุศลสถิตย์"
 
 ## Evidence on Hand
@@ -59,4 +59,4 @@ web
 ## Accessibility & Inclusion
 
 - **WCAG 2.1 AA — ข้อผูกมัดที่ผู้ใช้ยืนยัน (2026-11-21)**: ตัวอักษรปกติต้อง contrast ≥4.5:1, ขนาดอ่านได้ (ไม่ใช้ <12px), label/aria ภาษาไทยครบ
-- สถานะ 2026-11-21: จุดที่ Lighthouse ตั้งธงหมดแล้ว (แก้ครบ ≥4.5:1) — ข้อความบนพื้นไล่เฉด/ตัวอักษรแบรนด์ gradient ยังไม่ผ่าน AA ตามดีไซน์ที่อนุมัติไว้ (ตัวอักษรโลโก้ได้รับยกเว้นตาม WCAG 1.4.3) — ให้ตัดสินใจภายหลังก่อนขยายผล
+- สถานะ 2026-11-21 (ปิด ledger แล้ว): ตรวจ contrast เชิงตัวเลขครบทุกคู่ทั้งเว็บ (หน้าแรก + hero + admin) — ผ่าน ≥4.5:1 ทุกจุด, ข้อความ UI ทุกตัว ≥12px รวมหน้า admin, ปลาย gradient teal เข้มขึ้นเป็น #0e9488 (3.38 ≥3:1 AA-large, ผู้ใช้เลือก), อักขระตกแต่ง (⌕) ใส่ aria-hidden — ตัวอักษรโลโก้ "SmartLinkEdu" ยังได้รับยกเว้น logotype ตาม WCAG 1.4.3
