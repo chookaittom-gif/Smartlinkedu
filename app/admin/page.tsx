@@ -12,6 +12,7 @@ async function api(action: string, extra: Record<string, unknown> = {}): Promise
 }
 
 const blankSystem = (): System => ({ id: "", name: "", version: "", url: "", manualUrl: "", category: "งานบริการ", icon: "▣", sortOrder: 99 });
+const ICON_CHOICES = ["▣","🚗","🏫","🛠","❤️","🔍","🎤","🧰","📊","📚","📅","💳","🎓","🧪","🏛","📝","🧾","🪪","🖥","🌐","📦","🚌","🩺","🏥"];
 
 function PasswordInput(props: InputHTMLAttributes<HTMLInputElement>) {
   const [show, setShow] = useState(false);
@@ -33,6 +34,7 @@ export default function AdminPage() {
   const [systems, setSystems] = useState<System[]>([]);
   const [settings, setSettings] = useState<Settings>({ appName: "SmartLinkEdu", logoUrl: "" });
   const [editing, setEditing] = useState<System | null>(null);
+  const [iconPicker, setIconPicker] = useState(false);
   const [tab, setTab] = useState<"systems" | "settings">("systems");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -123,9 +125,11 @@ export default function AdminPage() {
     finally { setBusy(false); }
   }
 
+  const categoryOptions = Array.from(new Set(systems.map((s) => s.category).filter(Boolean)));
   const editingOpen = editing !== null;
   useEffect(() => {
     if (!editingOpen) return;
+    setIconPicker(false);
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setEditing(null); };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -207,7 +211,7 @@ export default function AdminPage() {
         <form className="edit-form modal-card" onSubmit={saveSystem}>
           <div className="modal-head"><h3>{editing.id ? "แก้ไขระบบ" : "เพิ่มระบบใหม่"}</h3><button type="button" className="modal-close" onClick={() => setEditing(null)} aria-label="ปิดหน้าต่างแก้ไข">✕</button></div>
           <label>ชื่อระบบ<input required value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} /></label>
-          <div className="form-row"><label>เวอร์ชัน<input value={editing.version} onChange={(e) => setEditing({ ...editing, version: e.target.value })} placeholder="เช่น V.1.0" /></label><label>หมวดหมู่<input value={editing.category} onChange={(e) => setEditing({ ...editing, category: e.target.value })} /></label><label>ไอคอน<input value={editing.icon} onChange={(e) => setEditing({ ...editing, icon: e.target.value })} /></label><label>ลำดับ<input type="number" value={editing.sortOrder} onChange={(e) => setEditing({ ...editing, sortOrder: Number(e.target.value) })} /></label></div>
+          <div className="form-row"><label>เวอร์ชัน<input value={editing.version} onChange={(e) => setEditing({ ...editing, version: e.target.value })} placeholder="เช่น V.1.0" /></label><label>หมวดหมู่<input list="category-options" value={editing.category} onChange={(e) => setEditing({ ...editing, category: e.target.value })} /><datalist id="category-options">{categoryOptions.map((c) => <option key={c} value={c} />)}</datalist></label><span className="icon-cell"><label>ไอคอน<input value={editing.icon} onChange={(e) => setEditing({ ...editing, icon: e.target.value })} /></label><button type="button" className="icon-toggle" aria-expanded={iconPicker} aria-label="เลือกไอคอนจากตาราง" onClick={() => setIconPicker((v) => !v)}>▾</button>{iconPicker && <span className="icon-grid">{ICON_CHOICES.map((em) => <button type="button" key={em} className={em === editing.icon ? "active" : ""} onClick={() => { setEditing({ ...editing, icon: em }); setIconPicker(false); }}>{em}</button>)}</span>}</span><label>ลำดับ<input type="number" value={editing.sortOrder} onChange={(e) => setEditing({ ...editing, sortOrder: Number(e.target.value) })} /></label></div>
           <label>URL ระบบ<input required type="url" value={editing.url} onChange={(e) => setEditing({ ...editing, url: e.target.value })} /></label><label>URL คู่มือ (เว้นว่างหากยังไม่มี)<input type="url" value={editing.manualUrl} onChange={(e) => setEditing({ ...editing, manualUrl: e.target.value })} /></label>
           <div className="form-actions"><button type="button" className="secondary-action" onClick={() => setEditing(null)}>ยกเลิก</button><button className="primary-action" disabled={busy}>บันทึก</button></div>
         </form>
